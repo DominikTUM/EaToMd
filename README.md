@@ -69,6 +69,18 @@ Windows Scheduled Task calling this command at logon, `pythonw` for a
 console-less run, or a Windows Service wrapper such as NSSM) - the
 process itself just loops and sleeps, it doesn't daemonize on its own.
 
+## Releasing
+
+Pushing a tag matching `v*.*.*` (e.g. `v0.1.0`) triggers the CD workflow
+(`.github/workflows/cd.yml`): it runs the tests, builds the sdist/wheel
+with `python -m build`, and publishes them as downloadable artifacts on a
+new GitHub Release for that tag.
+
+```
+git tag v0.1.0
+git push origin v0.1.0
+```
+
 ## Notes / next steps to validate on a real repository
 
 - `ea_source.py` uses the documented EA Automation API
