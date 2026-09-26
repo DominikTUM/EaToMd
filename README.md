@@ -1,7 +1,7 @@
 # EaToMd
 
 Pipe-and-filter pipeline that exports a Sparx Enterprise Architect repository
-to a Markdown "site", mirroring EA's native HTML export: one page per
+to Markdown or LaTeX, mirroring EA's native HTML export: one page per
 package, nested recursively, with diagrams rendered to images and elements
 cross-linked the way EA's own export does.
 
@@ -9,17 +9,26 @@ cross-linked the way EA's own export does.
 
 ```
 EA repository
-    -> eatomd.ea_source.extract_model        (EA COM -> IR)
-    -> eatomd.diagram_exporter.export_diagrams (renders each Diagram to PNG via EA)
-    -> eatomd.markdown_renderer.render_model  (IR -> {path: markdown})
+    -> eatomd.ea_source.extract_model          (EA COM -> IR)
+    -> eatomd.diagram_exporter.export_diagrams  (renders each Diagram to PNG via EA)
+    -> <format>_renderer.render_model           (IR -> {path: rendered text})
     -> eatomd.git_sink.write_files / commit / push  (write to disk, git commit, git push)
 ```
 
 Each stage is a plain function taking the previous stage's output; see
 `src/eatomd/pipeline.py` for how they're wired together. Only `ea_source.py`
-and `diagram_exporter.py` touch the EA COM API - everything from
-`markdown_renderer.py` onward operates on the plain dataclasses in
-`model.py` and is unit-tested without EA installed (see `tests/`).
+and `diagram_exporter.py` touch the EA COM API - everything from the render
+step onward operates on the plain dataclasses in `model.py` and is
+unit-tested without EA installed (see `tests/`).
+
+The render step is a Visitor: `markdown_renderer.MarkdownVisitor` and
+`latex_renderer.LatexVisitor` both subclass `export_visitor.ExportVisitor`,
+sharing the same tree walk and on-disk package folder layout
+(`layout.assign_package_dirs`) while each format decides for itself how to
+turn a package/diagram/element into text and how to cross-link them (see
+`--output-format` below). Adding a third format means writing one more
+`ExportVisitor` subclass, not touching the orchestrator or the other
+formats.
 
 ## Requirements
 
@@ -40,13 +49,24 @@ python -m eatomd.pipeline "C:\path\to\project.qea" "C:\path\to\output-repo" \
 Run with `--root-package` omitted to export every top-level package in the
 model. Pass `--no-commit` to write files without creating a git commit.
 Add `--push` to push a one-shot export's commit to `--remote` (default
-`origin`) once it's done.
+`origin`) once it's done. Add `--output-format latex` to export LaTeX
+(`.tex`) instead of Markdown - default is `markdown`.
+
+LaTeX output is one `.tex` file per package (same folder layout as
+Markdown), `\input` together into a single document starting from the
+root package's `index.tex` (which carries the `\documentclass`/
+`\begin{document}` preamble). Compile it with your usual LaTeX toolchain,
+e.g. `pdflatex index.tex` from the output directory (requires the
+`graphicx` and `hyperref` packages, both loaded automatically in the
+preamble). Unlike Markdown's per-file relative links, cross-references use
+`\label`/`\hyperref` keyed on each element/diagram's GUID, since `\input`
+makes the whole tree one document where labels must be unique globally.
 
 ## CI/CD watch mode
 
-To keep the Markdown export continuously in sync with the EA repository,
-run in watch mode instead of one-shot: it re-exports every N minutes and
-pushes any change straight to the remote.
+To keep the export continuously in sync with the EA repository, run in
+watch mode instead of one-shot: it re-exports every N minutes and pushes
+any change straight to the remote. `--output-format` applies here too.
 
 ```
 python -m eatomd.pipeline "C:\path\to\project.qea" "C:\path\to\output-repo" \

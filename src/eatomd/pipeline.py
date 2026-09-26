@@ -1,11 +1,14 @@
 """Orchestrator: wires the pipe-and-filter stages together.
 
     EA repository --> ea_source.extract_model --> diagram_exporter.export_diagrams
-                   --> markdown_renderer.render_model --> git_sink.write_files/commit/push
+                   --> <format>_renderer.render_model --> git_sink.write_files/commit/push
 
 Each arrow is a plain function call passing the IR (model.Model) or a
 {path: content} dict along; there is no shared mutable pipeline object, so
-each stage can be tested and reasoned about independently.
+each stage can be tested and reasoned about independently. The render step
+is selected by --output-format: every format is an ExportVisitor subclass
+(see export_visitor.py) sharing the same tree-walk and package layout, so
+adding a new one is a new visitor, not a change to this orchestrator.
 
 Two entry points:
   - run():   a single one-shot export (optionally commit + push).
@@ -22,7 +25,12 @@ import time
 from datetime import datetime
 from typing import Optional
 
-from . import diagram_exporter, ea_source, git_sink, markdown_renderer
+from . import diagram_exporter, ea_source, git_sink, latex_renderer, markdown_renderer
+
+RENDERERS = {
+    "markdown": markdown_renderer,
+    "latex": latex_renderer,
+}
 
 
 def run(
@@ -33,8 +41,11 @@ def run(
     do_commit: bool = True,
     do_push: bool = False,
     remote: str = "origin",
+    output_format: str = "markdown",
 ) -> bool:
     """Run one export. Returns True if a new commit was created."""
+    renderer = RENDERERS[output_format]
+
     repo = ea_source.open_repository(ea_project_path)
     try:
         model = ea_source.extract_model(repo, root_package_name=root_package_name)
@@ -42,7 +53,7 @@ def run(
     finally:
         ea_source.close_repository(repo)
 
-    files = markdown_renderer.render_model(model)
+    files = renderer.render_model(model)
     git_sink.write_files(output_dir, files)
 
     if not do_commit:
@@ -60,6 +71,7 @@ def watch(
     interval_minutes: float,
     root_package_name: Optional[str] = None,
     remote: str = "origin",
+    output_format: str = "markdown",
 ) -> None:
     """CI/CD mode: poll the EA repository every interval_minutes, and for
     any run that produces a real change, commit and push it to `remote`.
@@ -80,6 +92,7 @@ def watch(
                 do_commit=True,
                 do_push=True,
                 remote=remote,
+                output_format=output_format,
             )
             status = "pushed update" if committed else "no changes"
             print(f"[eatomd] {timestamp}: {status}")
@@ -92,7 +105,7 @@ def watch(
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Export a Sparx EA repository to Markdown.")
+    parser = argparse.ArgumentParser(description="Export a Sparx EA repository to Markdown or LaTeX.")
     parser.add_argument("ea_project_path", help="Path to the .qea/.eapx project, or an EA connection string")
     parser.add_argument("output_dir", help="Folder (git repo) to write the Markdown export into")
     parser.add_argument("--root-package", default=None, help="Only export this top-level package")
@@ -100,6 +113,12 @@ def main(argv=None) -> int:
     parser.add_argument("--no-commit", action="store_true", help="Write files but skip the git commit")
     parser.add_argument("--push", action="store_true", help="Push after committing (one-shot mode)")
     parser.add_argument("--remote", default="origin", help="Git remote to push to (default: origin)")
+    parser.add_argument(
+        "--output-format",
+        choices=sorted(RENDERERS),
+        default="markdown",
+        help="Export format (default: markdown)",
+    )
     parser.add_argument(
         "--watch-minutes",
         type=float,
@@ -116,6 +135,7 @@ def main(argv=None) -> int:
             interval_minutes=args.watch_minutes,
             root_package_name=args.root_package,
             remote=args.remote,
+            output_format=args.output_format,
         )
         return 0
 
@@ -127,6 +147,7 @@ def main(argv=None) -> int:
         do_commit=not args.no_commit,
         do_push=args.push,
         remote=args.remote,
+        output_format=args.output_format,
     )
     return 0
 
