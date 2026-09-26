@@ -11,6 +11,7 @@ from __future__ import annotations
 import posixpath
 from dataclasses import dataclass
 from typing import Dict, Optional
+from urllib.parse import quote
 
 from .model import Diagram, Element, Model, Package
 from .slugify import github_slug, safe_folder_name
@@ -84,6 +85,15 @@ def _element_heading(element: Element) -> str:
     return f"{element.name} ({element.type})"
 
 
+def _encode_path(path: str) -> str:
+    """Percent-encode a relative path for use as a Markdown link destination.
+    CommonMark link targets can't contain raw spaces/parentheses/etc unless
+    wrapped in <...>, and folder/file names are derived from arbitrary EA
+    package/element names, so every segment needs escaping - '/' stays as
+    the path separator and is never encoded itself."""
+    return "/".join(quote(segment) for segment in path.split("/"))
+
+
 def _link(from_dir: str, to_dir: str, filename: str, anchor: Optional[str]) -> str:
     """Build a Markdown link target from the file in from_dir to the file
     <to_dir>/<filename>#anchor, relative to from_dir."""
@@ -92,9 +102,10 @@ def _link(from_dir: str, to_dir: str, filename: str, anchor: Optional[str]) -> s
     else:
         rel = posixpath.relpath(to_dir or ".", from_dir or ".")
         target = posixpath.join(rel, filename) if rel != "." else filename
+    target = _encode_path(target) if target else target
     if anchor:
         target = f"{target}#{anchor}" if target else f"#{anchor}"
-    return target or filename
+    return target or _encode_path(filename)
 
 
 def _package_link(from_dir: str, pkg: Package, dirs: Dict[str, str]) -> str:
@@ -156,7 +167,7 @@ def _render_diagram(
     lines = [f"### {_diagram_heading(diagram)}", ""]
     if diagram.image_path:
         image_rel = posixpath.relpath(diagram.image_path, rel_dir or ".")
-        lines.append(f"![{diagram.name}]({image_rel})")
+        lines.append(f"![{diagram.name}]({_encode_path(image_rel)})")
         lines.append("")
     if diagram.notes:
         lines.append(diagram.notes.strip())

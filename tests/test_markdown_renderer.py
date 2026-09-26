@@ -109,6 +109,39 @@ def test_sibling_packages_with_same_name_are_deduplicated():
     assert "Interfaces-1/index.md" in files
 
 
+def test_links_and_image_paths_are_percent_encoded():
+    root = Package(guid="ROOT", name="Model", notes="", parent_guid=None)
+    model = Model(root=root)
+    model.packages_by_guid[root.guid] = root
+
+    pkg = Package(guid="PKG-A", name="Use Cases (v2)", notes="", parent_guid="ROOT")
+    root.subpackages.append(pkg)
+    model.packages_by_guid[pkg.guid] = pkg
+
+    element = Element(guid="EL-1", name="Login", type="Use Case", stereotype="", notes="", package_guid="PKG-A")
+    pkg.elements.append(element)
+    model.elements_by_guid[element.guid] = element
+
+    diagram = Diagram(
+        guid="DIA-1",
+        name="Overview",
+        type="Use Case",
+        notes="",
+        package_guid="PKG-A",
+        image_path="images/DIA-1.png",
+    )
+    pkg.diagrams.append(diagram)
+    model.diagrams_by_guid[diagram.guid] = diagram
+
+    files = render_model(model)
+    root_page = files["index.md"]
+    # raw space/parentheses in a folder name must not appear unescaped in a link target
+    assert "(Use%20Cases%20%28v2%29/index.md)" in root_page
+
+    pkg_page = files["Use Cases (v2)/index.md"]
+    assert "![Overview](../images/DIA-1.png)" in pkg_page
+
+
 def test_root_package_has_no_up_link():
     model = build_sample_model()
     files = render_model(model)

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "eatomd"
-version = "0.1.0"
+version = "0.1.1"
 description = "Pipe-and-filter pipeline that exports a Sparx Enterprise Architect repository to Markdown"
 readme = "README.md"
 requires-python = ">=3.9"
