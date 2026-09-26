@@ -46,6 +46,16 @@ def escape_latex(text: str) -> str:
     return _LATEX_ESCAPE_RE.sub(lambda m: _LATEX_SPECIAL_CHARS[m.group(0)], text)
 
 
+def _includegraphics(image_path: str) -> str:
+    """SVG needs the `svg` package's \\includesvg (which shells out to
+    Inkscape at compile time to rasterize/convert it) - plain
+    \\includegraphics only understands raster formats and PDF/EPS."""
+    if image_path.lower().endswith(".svg"):
+        path_no_ext = image_path.rsplit(".", 1)[0]
+        return f"\\includesvg[width=\\textwidth]{{{path_no_ext}}}"
+    return f"\\includegraphics[width=\\textwidth]{{{image_path}}}"
+
+
 def _label(kind: str, guid: str) -> str:
     """A LaTeX \\label must be unique across the whole compiled document;
     a GUID already is, so no per-document collision bookkeeping is needed
@@ -95,7 +105,7 @@ class LatexVisitor(ExportVisitor):
             "",
         ]
         if diagram.image_path:
-            lines.append(f"\\includegraphics[width=\\textwidth]{{{diagram.image_path}}}")
+            lines.append(_includegraphics(diagram.image_path))
             lines.append("")
         if diagram.notes:
             lines.append(escape_latex(diagram.notes.strip()))
@@ -169,6 +179,7 @@ class LatexVisitor(ExportVisitor):
 _PREAMBLE = [
     "\\documentclass{article}",
     "\\usepackage{graphicx}",
+    "\\usepackage{svg}",  # for \includesvg - needs Inkscape on PATH and pdflatex -shell-escape
     "\\usepackage{hyperref}",
     "\\begin{document}",
     "",

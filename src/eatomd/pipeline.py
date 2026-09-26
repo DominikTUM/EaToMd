@@ -32,6 +32,8 @@ RENDERERS = {
     "latex": latex_renderer,
 }
 
+DIAGRAM_FORMATS = ("png", "svg", "emf", "bmp", "jpg")
+
 
 def run(
     ea_project_path: str,
@@ -42,6 +44,7 @@ def run(
     do_push: bool = False,
     remote: str = "origin",
     output_format: str = "markdown",
+    diagram_format: str = "png",
 ) -> bool:
     """Run one export. Returns True if a new commit was created."""
     renderer = RENDERERS[output_format]
@@ -49,7 +52,7 @@ def run(
     repo = ea_source.open_repository(ea_project_path)
     try:
         model = ea_source.extract_model(repo, root_package_name=root_package_name)
-        diagram_exporter.export_diagrams(repo, model, output_dir)
+        diagram_exporter.export_diagrams(repo, model, output_dir, image_format=diagram_format)
     finally:
         ea_source.close_repository(repo)
 
@@ -72,6 +75,7 @@ def watch(
     root_package_name: Optional[str] = None,
     remote: str = "origin",
     output_format: str = "markdown",
+    diagram_format: str = "png",
 ) -> None:
     """CI/CD mode: poll the EA repository every interval_minutes, and for
     any run that produces a real change, commit and push it to `remote`.
@@ -93,6 +97,7 @@ def watch(
                 do_push=True,
                 remote=remote,
                 output_format=output_format,
+                diagram_format=diagram_format,
             )
             status = "pushed update" if committed else "no changes"
             print(f"[eatomd] {timestamp}: {status}")
@@ -120,6 +125,14 @@ def main(argv=None) -> int:
         help="Export format (default: markdown)",
     )
     parser.add_argument(
+        "--diagram-format",
+        choices=DIAGRAM_FORMATS,
+        default="png",
+        help="Diagram image format (default: png). 'svg' tries EA's native SVG export "
+        "(EA 16.1+ or the SVG add-in) and falls back to EMF->SVG conversion via Inkscape "
+        "if that's unavailable (e.g. on EA 15.2) - see README.",
+    )
+    parser.add_argument(
         "--watch-minutes",
         type=float,
         default=None,
@@ -136,6 +149,7 @@ def main(argv=None) -> int:
             root_package_name=args.root_package,
             remote=args.remote,
             output_format=args.output_format,
+            diagram_format=args.diagram_format,
         )
         return 0
 
@@ -148,6 +162,7 @@ def main(argv=None) -> int:
         do_push=args.push,
         remote=args.remote,
         output_format=args.output_format,
+        diagram_format=args.diagram_format,
     )
     return 0
 

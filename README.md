@@ -10,7 +10,7 @@ cross-linked the way EA's own export does.
 ```
 EA repository
     -> eatomd.ea_source.extract_model          (EA COM -> IR)
-    -> eatomd.diagram_exporter.export_diagrams  (renders each Diagram to PNG via EA)
+    -> eatomd.diagram_exporter.export_diagrams  (renders each Diagram to an image via EA)
     -> <format>_renderer.render_model           (IR -> {path: rendered text})
     -> eatomd.git_sink.write_files / commit / push  (write to disk, git commit, git push)
 ```
@@ -62,6 +62,30 @@ preamble). Unlike Markdown's per-file relative links, cross-references use
 `\label`/`\hyperref` keyed on each element/diagram's GUID, since `\input`
 makes the whole tree one document where labels must be unique globally.
 
+## Diagram image format
+
+By default diagrams are exported as PNG. Use `--diagram-format` to pick
+`png` (default), `svg`, `emf`, `bmp` or `jpg`.
+
+`svg` needs care: Sparx only added native SVG diagram export to EA in
+**16.1** (older versions need a separate community "SVG Diagram Export
+Add-In"). On EA 15.2 without that add-in, `diagram_exporter.py` first
+tries the native SVG export and, if EA rejects it, automatically falls
+back to exporting the always-supported vector format EMF and converting
+that to SVG with [Inkscape](https://inkscape.org) (must be on `PATH`) - so
+either way you get a real vector SVG, not a rasterized one. If neither
+path works (e.g. Inkscape isn't installed), the export fails with a clear
+error telling you to install Inkscape rather than silently producing a
+bad or missing image.
+
+For the LaTeX output format specifically, SVG diagrams are embedded with
+`\includesvg` (from the `svg` package, already added to the generated
+preamble) instead of `\includegraphics`, since plain `\includegraphics`
+can't read SVG directly. Compiling then needs Inkscape on `PATH` and
+`pdflatex -shell-escape` (the `svg` package shells out to Inkscape at
+compile time to rasterize each figure) - if you'd rather not deal with
+`-shell-escape`, use `--diagram-format png` for the LaTeX output instead.
+
 ## CI/CD watch mode
 
 To keep the export continuously in sync with the EA repository, run in
@@ -109,6 +133,11 @@ git push origin v0.1.0
   This hasn't been exercised against a live EA 15.2 instance in this
   environment (no EA install here) - run it against your repository and
   check connector direction/type formatting and diagram image quality.
+  In particular, the SVG native-export-then-EMF-fallback logic in
+  `diagram_exporter.py` is written from public documentation/forum
+  examples of `PutDiagramImageToFile`, not verified against a real EA
+  15.2 install - confirm it picks the fallback path (or the native path,
+  if you do have the SVG add-in) as expected on your setup.
 - Only `Connector` relationships are exported as cross-references today;
   extend `_extract_element` in `ea_source.py` if you also want e.g.
   generalizations shown separately, diagram-only elements without a

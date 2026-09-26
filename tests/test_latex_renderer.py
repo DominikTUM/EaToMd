@@ -89,6 +89,16 @@ def test_diagram_image_path_is_root_relative_not_package_relative():
     assert "\\includegraphics[width=\\textwidth]{images/DIA-1.png}" in pkg_page
 
 
+def test_svg_diagram_uses_includesvg_not_includegraphics():
+    model = build_sample_model()
+    model.diagrams_by_guid["DIA-1"].image_path = "images/DIA-1.svg"
+    files = render_model(model)
+    pkg_page = files["Domain & Co/index.tex"]
+    assert "\\includesvg[width=\\textwidth]{images/DIA-1}" in pkg_page
+    assert "\\includegraphics" not in pkg_page
+    assert "\\usepackage{svg}" in files["index.tex"]
+
+
 def test_element_cross_reference_uses_guid_based_label():
     model = build_sample_model()
     files = render_model(model)
